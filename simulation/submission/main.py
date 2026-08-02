@@ -1,10 +1,21 @@
 """
-Pokémon TCG AI Battle Challenge — Heuristic Agent v1.0
-Strategy: Gouging Fire ex Turbo
-- Prioritize getting Gouging Fire ex into active and powered up
-- Use Firebreather to grab Fire energy in bulk
-- Alternate Blaze Blitz (260) with Heat Blast (60) or rotate via Switch
-- Use Boss's Orders to target weak bench Pokemon for easy KOs
+Pokémon TCG AI Battle Challenge — Heuristic Agent v2.0
+Strategy: Mega Lopunny ex Turbo
+
+Key insight from #1 leaderboard player:
+- Mega Lopunny ex (330 HP) has Gale Thrust: 230 dmg for 1 Colorless energy
+  IF it moved from Bench to Active this turn.
+- By using Switch/Retreat every turn, it consistently deals 230 dmg.
+- Colorless type = any energy works.
+- Mega evolves directly from Buneary (70 HP Basic) — no Stage 1 needed.
+- Fan Rotom's Fan Call ability on T1 searches for up to 3 Colorless ≤100HP Pokémon (finds Buneary).
+
+Turn sequence:
+1. Play Buneary + Fan Rotom on turn 1 to fill bench
+2. Use Mega Signal / Hilda / Ultra Ball to find Mega Lopunny ex
+3. Evolve Buneary -> Mega Lopunny ex (Mega counts as evolution)
+4. Attach 1 energy, Switch from bench to active => Gale Thrust 230!
+5. Next turn: retreat/switch back, then switch in again => 230 again
 """
 
 import os
@@ -16,7 +27,7 @@ from cg.api import (
 )
 
 # ============================================================================
-# CARD DATABASE (loaded once)
+# CARD DATABASE
 # ============================================================================
 _card_data: dict[int, CardData] = {}
 _attack_data: dict[int, Attack] = {}
@@ -38,30 +49,29 @@ def read_deck_csv() -> list[int]:
         file_path = "/kaggle_simulations/agent/" + file_path
     with open(file_path, "r") as file:
         csv = file.read().strip().split("\n")
-    deck = []
-    for line in csv[:60]:
-        deck.append(int(line.strip()))
-    return deck
+    return [int(line.strip()) for line in csv[:60]]
 
 # ============================================================================
 # KEY CARD IDS
 # ============================================================================
-GOUGING_FIRE_EX = 46
-FIRE_ENERGY = 2
-PRECIOUS_TROLLEY = 1126
+BUNEARY = 848
+MEGA_LOPUNNY_EX = 849
+FAN_ROTOM = 174
+MEGA_SIGNAL = 1145
 ULTRA_BALL = 1121
 MASTER_BALL = 1125
 SWITCH = 1123
-PRIME_CATCHER = 1088
-BOSSS_ORDERS = 1182
-FIREBREATHER = 1232
+HILDA = 1225
 LILLIES_DETERMINATION = 1227
 NIGHT_STRETCHER = 1097
-MAXIMUM_BELT = 1158
-SURVIVAL_BRACE = 1155
+AIR_BALLOON = 1174
+RESCUE_BOARD = 1157
+
+# Gale Thrust attack ID
+GALE_THRUST_ID = None  # Will be resolved dynamically
 
 # ============================================================================
-# HELPER FUNCTIONS
+# HELPERS
 # ============================================================================
 def get_card_data(card_id: int) -> CardData | None:
     _ensure_db()
@@ -77,257 +87,250 @@ def get_my_state(state: State) -> PlayerState:
 def get_opp_state(state: State) -> PlayerState:
     return state.players[1 - state.yourIndex]
 
-def get_active_pokemon(player: PlayerState) -> Pokemon | None:
+def get_active(player: PlayerState) -> Pokemon | None:
     if player.active and len(player.active) > 0 and player.active[0] is not None:
         return player.active[0]
     return None
 
-def count_energy(pokemon: Pokemon, energy_type: EnergyType | None = None) -> int:
-    """Count energies on a pokemon, optionally filtering by type."""
-    if energy_type is None:
-        return len(pokemon.energies)
-    return sum(1 for e in pokemon.energies if e == energy_type)
+def count_energy(pokemon: Pokemon) -> int:
+    return len(pokemon.energies)
 
-def is_gouging_fire(card_id: int) -> bool:
-    return card_id == GOUGING_FIRE_EX
+def is_mega_lopunny(card_id: int) -> bool:
+    return card_id == MEGA_LOPUNNY_EX
 
-def pokemon_can_attack(pokemon: Pokemon) -> bool:
-    """Check if pokemon has enough energy for any attack."""
+def is_buneary(card_id: int) -> bool:
+    return card_id == BUNEARY
+
+def is_our_pokemon(card_id: int) -> bool:
+    return card_id in (BUNEARY, MEGA_LOPUNNY_EX, FAN_ROTOM)
+
+def pokemon_has_energy(pokemon: Pokemon) -> bool:
+    return len(pokemon.energies) > 0
+
+def can_attack(pokemon: Pokemon) -> bool:
+    """Check if pokemon has at least 1 energy (all our attacks need just 1)."""
     cd = get_card_data(pokemon.id)
     if cd is None:
         return False
     for aid in cd.attacks:
         atk = get_attack_data(aid)
-        if atk is None:
-            continue
-        if can_pay_attack_cost(pokemon, atk):
+        if atk and len(atk.energies) <= len(pokemon.energies):
             return True
     return False
 
-def can_pay_attack_cost(pokemon: Pokemon, attack: Attack) -> bool:
-    """Check if a pokemon has enough energy to use an attack."""
-    available = list(pokemon.energies)
-    needed = list(attack.energies)
-    
-    for e in needed:
-        if e in available:
-            available.remove(e)
-        elif EnergyType.COLORLESS in [e] or e == EnergyType.COLORLESS:
-            # Colorless can be paid by any energy
-            if available:
-                available.pop(0)
-            else:
-                return False
-        else:
-            # Try to pay with any available energy for colorless cost
-            return False
-    return True
-
-def score_attack_option(option: Option, state: State) -> float:
-    """Score an attack option based on damage and strategic value."""
+def score_attack(option: Option, state: State) -> float:
+    """Score an attack option."""
     atk = get_attack_data(option.attackId)
     if atk is None:
         return 0.0
     
     score = float(atk.damage)
     
-    # Bonus for attacks that can KO the opponent's active
-    opp = get_opp_state(state)
-    opp_active = get_active_pokemon(opp)
-    if opp_active and opp_active.hp <= atk.damage:
-        score += 500  # Huge bonus for KO
+    # Gale Thrust base is 60, but if we switched in this turn it does 230
+    # The engine handles the bonus automatically, so we score based on expected damage
+    if atk.name and "Gale" in atk.name:
+        score = 230  # Assume we switched in (which our strategy ensures)
     
-    # Penalty for self-damage or can't-use-again restrictions (but still worth doing)
-    text = atk.text.lower()
-    if "damage to itself" in text:
-        score -= 20
+    # Bonus for KO potential
+    opp = get_opp_state(state)
+    opp_active = get_active(opp)
+    if opp_active:
+        effective_dmg = score
+        # Check weakness (Mega Lopunny is Colorless, weak to Fighting)
+        opp_cd = get_card_data(opp_active.id)
+        # If we can KO
+        if opp_active.hp <= effective_dmg:
+            score += 500
+    
+    # Spiky Hopper ignores effects on opponent - good against protected pokemon
+    if atk.text and "isn't affected by any effects" in atk.text:
+        score += 20
     
     return score
 
 # ============================================================================
 # MAIN SELECTION LOGIC
 # ============================================================================
-def handle_main_selection(obs: Observation) -> list[int]:
-    """Handle the MAIN selection (what to do on your turn)."""
+def handle_main(obs: Observation) -> list[int]:
     state = obs.current
     select = obs.select
     options = select.option
     me = get_my_state(state)
     opp = get_opp_state(state)
-    my_active = get_active_pokemon(me)
+    my_active = get_active(me)
     
-    # Categorize available options
-    play_options = []      # Play cards from hand
-    attach_options = []    # Attach energy
-    evolve_options = []    # Evolve pokemon
-    ability_options = []   # Use abilities
-    attack_options = []    # Attack
-    retreat_options = []   # Retreat
-    end_options = []       # End turn
+    # Classify options
+    play_opts = []
+    attach_opts = []
+    evolve_opts = []
+    ability_opts = []
+    attack_opts = []
+    retreat_opts = []
+    end_opts = []
     
     for i, opt in enumerate(options):
-        if opt.type == OptionType.PLAY:
-            play_options.append(i)
-        elif opt.type == OptionType.ATTACH:
-            attach_options.append(i)
-        elif opt.type == OptionType.EVOLVE:
-            evolve_options.append(i)
-        elif opt.type == OptionType.ABILITY:
-            ability_options.append(i)
-        elif opt.type == OptionType.ATTACK:
-            attack_options.append(i)
-        elif opt.type == OptionType.RETREAT:
-            retreat_options.append(i)
-        elif opt.type == OptionType.END:
-            end_options.append(i)
+        if opt.type == OptionType.PLAY: play_opts.append(i)
+        elif opt.type == OptionType.ATTACH: attach_opts.append(i)
+        elif opt.type == OptionType.EVOLVE: evolve_opts.append(i)
+        elif opt.type == OptionType.ABILITY: ability_opts.append(i)
+        elif opt.type == OptionType.ATTACK: attack_opts.append(i)
+        elif opt.type == OptionType.RETREAT: retreat_opts.append(i)
+        elif opt.type == OptionType.END: end_opts.append(i)
     
-    # === PRIORITY 1: Play Supporter cards (draw/search) ===
-    if not state.supporterPlayed:
-        for i in play_options:
+    # Check bench state
+    has_bench_mega_with_energy = any(
+        is_mega_lopunny(bp.id) and pokemon_has_energy(bp) for bp in me.bench
+    )
+    has_bench_mega = any(is_mega_lopunny(bp.id) for bp in me.bench)
+    active_is_mega = my_active and is_mega_lopunny(my_active.id)
+    active_can_attack = my_active and can_attack(my_active)
+    
+    # === P0: Use Fan Rotom ability (search for Buneary) ===
+    for i in ability_opts:
+        opt = options[i]
+        if opt.cardId == FAN_ROTOM:
+            return [i]
+    
+    # === P1: EVOLVE Buneary -> Mega Lopunny ex ===
+    if evolve_opts:
+        bench_evolves = [i for i in evolve_opts if options[i].inPlayArea == AreaType.BENCH]
+        active_evolves = [i for i in evolve_opts if options[i].inPlayArea == AreaType.ACTIVE]
+        if bench_evolves:
+            return [bench_evolves[0]]
+        if active_evolves:
+            return [active_evolves[0]]
+    
+    # === P2: CRITICAL — Switch cycling for Gale Thrust bonus ===
+    # If active is NOT Mega Lopunny, but we have one on bench with energy: SWITCH NOW
+    # If active IS Mega Lopunny and we have another on bench with energy: swap for fresh Gale Thrust
+    if has_bench_mega_with_energy:
+        # Try Switch item first
+        for i in play_opts:
             opt = options[i]
-            if me.hand is None:
-                continue
-            hand_card = me.hand[opt.index] if opt.index < len(me.hand) else None
-            if hand_card is None:
-                continue
+            if me.hand is None: continue
+            if opt.index >= len(me.hand): continue
+            hand_card = me.hand[opt.index]
+            if hand_card is None: continue
+            if hand_card.id == SWITCH:
+                return [i]
+        # Try retreat if we can't switch
+        if retreat_opts and my_active and not active_is_mega:
+            return [retreat_opts[0]]
+        # If active is Mega Lopunny but hasn't attacked yet, retreat to swap
+        if retreat_opts and active_is_mega and active_can_attack:
+            # Only retreat if we have another Mega Lopunny on bench that can attack
+            for bp in me.bench:
+                if is_mega_lopunny(bp.id) and pokemon_has_energy(bp):
+                    return [retreat_opts[0]]
+    
+    # === P3: Attach energy to Mega Lopunny that needs it ===
+    if attach_opts and not state.energyAttached:
+        best_i, best_score = None, -1
+        for i in attach_opts:
+            opt = options[i]
+            score = 0
+            if opt.inPlayArea == AreaType.ACTIVE:
+                act = get_active(me)
+                if act and is_mega_lopunny(act.id):
+                    score = 300 if count_energy(act) == 0 else 50
+                elif act:
+                    score = 10
+            elif opt.inPlayArea == AreaType.BENCH:
+                if opt.inPlayIndex is not None and opt.inPlayIndex < len(me.bench):
+                    bp = me.bench[opt.inPlayIndex]
+                    if is_mega_lopunny(bp.id) and count_energy(bp) == 0:
+                        score = 250
+                    elif is_mega_lopunny(bp.id):
+                        score = 40
+                    elif is_buneary(bp.id):
+                        score = 20
+                    else:
+                        score = 5
+            if score > best_score:
+                best_score = score
+                best_i = i
+        if best_i is not None:
+            return [best_i]
+    
+    # === P4: Play search Items (Mega Signal, Ultra Ball, Master Ball) ===
+    for i in play_opts:
+        opt = options[i]
+        if me.hand is None: continue
+        if opt.index >= len(me.hand): continue
+        hand_card = me.hand[opt.index]
+        if hand_card is None: continue
+        cd = get_card_data(hand_card.id)
+        if cd and cd.cardType == CardType.ITEM:
+            if hand_card.id == MEGA_SIGNAL:
+                return [i]
+            if hand_card.id in (ULTRA_BALL, MASTER_BALL):
+                return [i]
+            if hand_card.id == NIGHT_STRETCHER:
+                return [i]
+    
+    # === P5: Play Supporters (search/draw) ===
+    if not state.supporterPlayed:
+        for i in play_opts:
+            opt = options[i]
+            if me.hand is None: continue
+            if opt.index >= len(me.hand): continue
+            hand_card = me.hand[opt.index]
+            if hand_card is None: continue
             cd = get_card_data(hand_card.id)
             if cd and cd.cardType == CardType.SUPPORTER:
-                # Prioritize Firebreather (energy search) and Lillie's (draw)
-                if hand_card.id == FIREBREATHER:
+                if hand_card.id == HILDA:
                     return [i]
                 if hand_card.id == LILLIES_DETERMINATION:
                     return [i]
-                if hand_card.id == BOSSS_ORDERS:
-                    # Use Boss's Orders if opponent has a weak benched pokemon
-                    opp_bench = opp.bench
-                    opp_active = get_active_pokemon(opp)
-                    if opp_bench:
-                        # Check if there's a weaker target on bench
-                        weakest_bench_hp = min(p.hp for p in opp_bench)
-                        active_hp = opp_active.hp if opp_active else 999
-                        if weakest_bench_hp < active_hp:
-                            return [i]
     
-    # === PRIORITY 2: Play Item cards ===
-    for i in play_options:
+    # === P6: Play Tools (Air Balloon, Rescue Board) on Mega Lopunny ===
+    for i in play_opts:
         opt = options[i]
-        if me.hand is None:
-            continue
-        hand_card = me.hand[opt.index] if opt.index < len(me.hand) else None
-        if hand_card is None:
-            continue
-        cd = get_card_data(hand_card.id)
-        if cd and cd.cardType == CardType.ITEM:
-            # Play search items first (Ultra Ball, Master Ball, Precious Trolley)
-            if hand_card.id in (ULTRA_BALL, MASTER_BALL, PRECIOUS_TROLLEY):
-                return [i]
-            # Play Night Stretcher to recover resources
-            if hand_card.id == NIGHT_STRETCHER:
-                return [i]
-            # Play Switch if active can't attack but benched Gouging Fire can
-            if hand_card.id == SWITCH and my_active:
-                if not pokemon_can_attack(my_active):
-                    for bp in me.bench:
-                        if is_gouging_fire(bp.id) and pokemon_can_attack(bp):
-                            return [i]
-                # Also switch if Gouging Fire used Blaze Blitz (to reset it)
-                # We detect this indirectly: if active is Gouging Fire with 3+ energy but 
-                # we have another powered Gouging Fire on bench
-                if is_gouging_fire(my_active.id) and count_energy(my_active) >= 3:
-                    for bp in me.bench:
-                        if is_gouging_fire(bp.id) and count_energy(bp) >= 3:
-                            return [i]
-            if hand_card.id == PRIME_CATCHER:
-                return [i]
-    
-    # === PRIORITY 3: Play Tool cards ===
-    for i in play_options:
-        opt = options[i]
-        if me.hand is None:
-            continue
-        hand_card = me.hand[opt.index] if opt.index < len(me.hand) else None
-        if hand_card is None:
-            continue
+        if me.hand is None: continue
+        if opt.index >= len(me.hand): continue
+        hand_card = me.hand[opt.index]
+        if hand_card is None: continue
         cd = get_card_data(hand_card.id)
         if cd and cd.cardType == CardType.TOOL:
             return [i]
     
-    # === PRIORITY 4: Attach energy to active Gouging Fire first, then bench ===
-    if attach_options and not state.energyAttached:
-        best_attach = None
-        best_score = -1
-        for i in attach_options:
-            opt = options[i]
-            score = 0
-            # Prefer attaching to active pokemon
-            if opt.inPlayArea == AreaType.ACTIVE:
-                score += 100
-                # Extra bonus if it's Gouging Fire and needs energy
-                if my_active and is_gouging_fire(my_active.id):
-                    energy_count = count_energy(my_active)
-                    if energy_count < 3:
-                        score += 200 - energy_count * 50  # Higher priority when fewer energy
-            elif opt.inPlayArea == AreaType.BENCH:
-                # Prefer attaching to benched Gouging Fire
-                if opt.inPlayIndex < len(me.bench):
-                    bp = me.bench[opt.inPlayIndex]
-                    if is_gouging_fire(bp.id):
-                        energy_count = count_energy(bp)
-                        if energy_count < 3:
-                            score += 50
-            if score > best_score:
-                best_score = score
-                best_attach = i
-        if best_attach is not None:
-            return [best_attach]
-    
-    # === PRIORITY 5: Play basic pokemon from hand to bench ===
-    for i in play_options:
+    # === P7: Play Basic Pokemon to bench ===
+    for i in play_opts:
         opt = options[i]
-        if me.hand is None:
-            continue
-        hand_card = me.hand[opt.index] if opt.index < len(me.hand) else None
-        if hand_card is None:
-            continue
+        if me.hand is None: continue
+        if opt.index >= len(me.hand): continue
+        hand_card = me.hand[opt.index]
+        if hand_card is None: continue
         cd = get_card_data(hand_card.id)
         if cd and cd.cardType == CardType.POKEMON and cd.basic:
             if len(me.bench) < me.benchMax:
                 return [i]
     
-    # === PRIORITY 6: Use abilities ===
-    for i in ability_options:
-        return [i]
-    
-    # === PRIORITY 7: Retreat if active can't attack but benched pokemon can ===
-    if retreat_options and my_active:
-        if not pokemon_can_attack(my_active):
+    # === P8: Retreat if active can't attack but benched can ===
+    if retreat_opts and my_active:
+        if not active_can_attack:
             for bp in me.bench:
-                if pokemon_can_attack(bp):
-                    return [retreat_options[0]]
+                if can_attack(bp):
+                    return [retreat_opts[0]]
     
-    # === PRIORITY 8: Attack! ===
-    if attack_options:
-        best_attack = None
-        best_score = -1
-        for i in attack_options:
-            opt = options[i]
-            score = score_attack_option(opt, state)
+    # === P9: Attack! ===
+    if attack_opts:
+        best_i, best_score = 0, -1
+        for i in attack_opts:
+            score = score_attack(options[i], state)
             if score > best_score:
                 best_score = score
-                best_attack = i
-        if best_attack is not None:
-            return [best_attack]
+                best_i = i
+        return [best_i]
     
-    # === PRIORITY 9: End turn ===
-    if end_options:
-        return [end_options[0]]
+    # === P10: End turn ===
+    if end_opts:
+        return [end_opts[0]]
     
-    # Fallback: random
     return random.sample(list(range(len(options))), select.maxCount)
 
 
-def handle_card_selection(obs: Observation) -> list[int]:
-    """Handle card selection prompts (search, discard, switch, etc.)."""
+def handle_card(obs: Observation) -> list[int]:
     select = obs.select
     state = obs.current
     options = select.option
@@ -335,127 +338,114 @@ def handle_card_selection(obs: Observation) -> list[int]:
     me = get_my_state(state)
     opp = get_opp_state(state)
     
-    # --- SETUP: Choose active pokemon ---
+    # --- SETUP: Active pokemon ---
     if context == SelectContext.SETUP_ACTIVE_POKEMON:
-        # Pick Gouging Fire ex if available
+        # Prefer Buneary (will evolve into Mega Lopunny), or Fan Rotom
         for i, opt in enumerate(options):
-            if opt.type == OptionType.CARD and opt.cardId == GOUGING_FIRE_EX:
+            if opt.cardId == FAN_ROTOM:
+                return [i]  # Fan Rotom as active = can use Fan Call T1
+        for i, opt in enumerate(options):
+            if opt.cardId == BUNEARY:
                 return [i]
-        # Otherwise pick highest HP
-        best_i, best_hp = 0, 0
-        for i, opt in enumerate(options):
-            cd = get_card_data(opt.cardId) if opt.cardId else None
-            if cd and cd.hp > best_hp:
-                best_hp = cd.hp
-                best_i = i
-        return [best_i]
+        return [0]
     
-    # --- SETUP: Choose bench pokemon ---
+    # --- SETUP: Bench pokemon ---
     if context == SelectContext.SETUP_BENCH_POKEMON:
-        # Put all available Gouging Fire on bench
         chosen = []
+        # Bench Buneary first
         for i, opt in enumerate(options):
-            if opt.type == OptionType.CARD and opt.cardId == GOUGING_FIRE_EX:
+            if opt.cardId == BUNEARY and len(chosen) < select.maxCount:
                 chosen.append(i)
-        if chosen:
-            return chosen[:select.maxCount]
-        # Put any pokemon on bench
-        chosen = [i for i, opt in enumerate(options) if opt.type == OptionType.CARD]
+        # Then Fan Rotom
+        for i, opt in enumerate(options):
+            if opt.cardId == FAN_ROTOM and i not in chosen and len(chosen) < select.maxCount:
+                chosen.append(i)
         if chosen:
             return chosen[:select.maxCount]
         return list(range(min(select.minCount, len(options))))
     
-    # --- SWITCH: Pick best pokemon to switch to ---
+    # --- SWITCH/TO_ACTIVE: Pick Mega Lopunny with energy ---
     if context in (SelectContext.SWITCH, SelectContext.TO_ACTIVE):
-        # Prefer a powered-up Gouging Fire
         best_i, best_score = 0, -1
         for i, opt in enumerate(options):
             score = 0
-            cd = get_card_data(opt.cardId) if opt.cardId else None
-            if cd and is_gouging_fire(cd.cardId):
+            if opt.cardId == MEGA_LOPUNNY_EX:
                 score += 200
-            # Check if this bench pokemon can attack
             if opt.area == AreaType.BENCH and opt.index is not None and opt.index < len(me.bench):
                 bp = me.bench[opt.index]
-                if pokemon_can_attack(bp):
+                if pokemon_has_energy(bp):
                     score += 100
-                score += count_energy(bp) * 20
+                score += count_energy(bp) * 10
             if score > best_score:
                 best_score = score
                 best_i = i
         return [best_i]
     
-    # --- TO_BENCH: Bench pokemon selection ---
+    # --- TO_BENCH ---
     if context == SelectContext.TO_BENCH:
-        # Prefer Gouging Fire
         chosen = []
         for i, opt in enumerate(options):
-            if opt.cardId == GOUGING_FIRE_EX:
+            if opt.cardId in (BUNEARY, MEGA_LOPUNNY_EX):
                 chosen.append(i)
         if chosen:
             return chosen[:select.maxCount]
-        # Otherwise any pokemon
         return list(range(min(select.maxCount, len(options))))
     
-    # --- TO_HAND: Pick best card to add to hand ---
+    # --- TO_HAND: Search results — pick best cards ---
     if context == SelectContext.TO_HAND:
-        # Prefer Gouging Fire, then energy, then supporters
-        best = []
-        for i, opt in enumerate(options):
-            cd = get_card_data(opt.cardId) if opt.cardId else None
-            if cd:
-                if is_gouging_fire(cd.cardId):
-                    best.insert(0, i)  # Top priority
-                elif cd.cardId == FIRE_ENERGY:
-                    best.append(i)
-                elif cd.cardType == CardType.SUPPORTER:
-                    best.append(i)
-                elif cd.cardType == CardType.ITEM:
-                    best.append(i)
-                else:
-                    best.append(i)
-            else:
-                best.append(i)
-        if best:
-            return best[:select.maxCount]
-        return list(range(min(select.maxCount, len(options))))
-    
-    # --- DISCARD: Choose least valuable cards ---
-    if context == SelectContext.DISCARD:
-        # Discard order: duplicate supporters > items > energy > pokemon
         scored = []
         for i, opt in enumerate(options):
-            score = 50  # Default
-            cd = get_card_data(opt.cardId) if opt.cardId else None
-            if cd:
-                if cd.cardType == CardType.BASIC_ENERGY:
-                    score = 20  # Low priority to discard energy
-                elif cd.cardType == CardType.SUPPORTER:
-                    score = 70
-                elif cd.cardType == CardType.ITEM:
-                    score = 60
-                elif cd.cardType == CardType.POKEMON:
-                    if is_gouging_fire(cd.cardId):
-                        score = 5  # Don't discard our main attacker
+            score = 0
+            if opt.cardId == MEGA_LOPUNNY_EX:
+                score = 100
+            elif opt.cardId == BUNEARY:
+                score = 80
+            elif opt.cardId == FAN_ROTOM:
+                score = 60
+            else:
+                cd = get_card_data(opt.cardId) if opt.cardId else None
+                if cd:
+                    if cd.cardType == CardType.BASIC_ENERGY:
+                        score = 70
+                    elif cd.cardType == CardType.SUPPORTER:
+                        score = 50
+                    elif cd.cardType == CardType.ITEM:
+                        score = 40
                     else:
-                        score = 80
+                        score = 30
+                else:
+                    score = 20
             scored.append((score, i))
         scored.sort(reverse=True)
         return [s[1] for s in scored[:select.maxCount]]
     
-    # --- DAMAGE/DAMAGE_COUNTER: Target opponent's weakest pokemon ---
+    # --- DISCARD: Discard least valuable ---
+    if context == SelectContext.DISCARD:
+        scored = []
+        for i, opt in enumerate(options):
+            score = 50
+            cd = get_card_data(opt.cardId) if opt.cardId else None
+            if cd:
+                if is_mega_lopunny(cd.cardId): score = 5
+                elif is_buneary(cd.cardId): score = 10
+                elif cd.cardType == CardType.BASIC_ENERGY: score = 70  # Extra energy is fine to discard
+                elif cd.cardType == CardType.SUPPORTER: score = 60
+                elif cd.cardType == CardType.ITEM: score = 55
+                else: score = 80
+            scored.append((score, i))
+        scored.sort(reverse=True)
+        return [s[1] for s in scored[:select.maxCount]]
+    
+    # --- DAMAGE targeting ---
     if context in (SelectContext.DAMAGE, SelectContext.DAMAGE_COUNTER, SelectContext.DAMAGE_COUNTER_ANY):
-        # Target weakest opponent pokemon for KO
         best_i, best_score = 0, -1
         for i, opt in enumerate(options):
             score = 0
-            if opt.playerIndex != state.yourIndex:  # Opponent's pokemon
+            if opt.playerIndex != state.yourIndex:
                 score += 100
-                # Prefer lower HP targets (closer to KO)
                 if opt.area == AreaType.ACTIVE:
-                    opp_active = get_active_pokemon(opp)
-                    if opp_active:
-                        score += (500 - opp_active.hp)
+                    a = get_active(opp)
+                    if a: score += (500 - a.hp)
                 elif opt.area == AreaType.BENCH and opt.index is not None and opt.index < len(opp.bench):
                     score += (500 - opp.bench[opt.index].hp)
             if score > best_score:
@@ -463,154 +453,135 @@ def handle_card_selection(obs: Observation) -> list[int]:
                 best_i = i
         return [best_i]
     
-    # --- HEAL: Heal our most damaged pokemon ---
+    # --- HEAL ---
     if context in (SelectContext.HEAL, SelectContext.REMOVE_DAMAGE_COUNTER):
-        best_i, best_damage = 0, -1
+        best_i, best_dmg = 0, -1
         for i, opt in enumerate(options):
             if opt.playerIndex == state.yourIndex:
                 if opt.area == AreaType.ACTIVE:
-                    active = get_active_pokemon(me)
-                    if active:
-                        damage = active.maxHp - active.hp
-                        if damage > best_damage:
-                            best_damage = damage
-                            best_i = i
+                    a = get_active(me)
+                    if a and (a.maxHp - a.hp) > best_dmg:
+                        best_dmg = a.maxHp - a.hp
+                        best_i = i
                 elif opt.area == AreaType.BENCH and opt.index is not None and opt.index < len(me.bench):
                     bp = me.bench[opt.index]
-                    damage = bp.maxHp - bp.hp
-                    if damage > best_damage:
-                        best_damage = damage
+                    if (bp.maxHp - bp.hp) > best_dmg:
+                        best_dmg = bp.maxHp - bp.hp
                         best_i = i
         return [best_i]
     
-    # --- ATTACH_TO: Attach to pokemon that needs energy most ---
+    # --- ATTACH_TO ---
     if context == SelectContext.ATTACH_TO:
         best_i, best_score = 0, -1
         for i, opt in enumerate(options):
             score = 0
             if opt.area == AreaType.ACTIVE:
-                active = get_active_pokemon(me)
-                if active and is_gouging_fire(active.id):
-                    score = 300 - count_energy(active) * 50
-                elif active:
-                    score = 100 - count_energy(active) * 20
+                a = get_active(me)
+                if a and is_mega_lopunny(a.id) and count_energy(a) == 0:
+                    score = 300
+                elif a:
+                    score = 50
             elif opt.area == AreaType.BENCH and opt.index is not None and opt.index < len(me.bench):
                 bp = me.bench[opt.index]
-                if is_gouging_fire(bp.id):
-                    score = 200 - count_energy(bp) * 50
+                if is_mega_lopunny(bp.id) and count_energy(bp) == 0:
+                    score = 250
+                elif is_mega_lopunny(bp.id):
+                    score = 40
                 else:
-                    score = 50
+                    score = 10
             if score > best_score:
                 best_score = score
                 best_i = i
         return [best_i]
-
-    # --- EVOLVES_FROM/EVOLVES_TO: Evolution selection ---
-    if context in (SelectContext.EVOLVES_FROM, SelectContext.EVOLVES_TO):
-        return [0]  # Just pick first option
-
-    # --- ATTACH_FROM: Pick best card to detach ---
-    if context == SelectContext.ATTACH_FROM:
+    
+    # --- EVOLVES_FROM: Pick Buneary to evolve ---
+    if context == SelectContext.EVOLVES_FROM:
+        for i, opt in enumerate(options):
+            if opt.cardId == BUNEARY:
+                return [i]
         return [0]
     
-    # --- LOOK: Looking at cards ---
-    if context == SelectContext.LOOK:
-        # Pick the most valuable cards
-        best = []
+    # --- EVOLVES_TO: Pick Mega Lopunny ---
+    if context == SelectContext.EVOLVES_TO:
         for i, opt in enumerate(options):
-            cd = get_card_data(opt.cardId) if opt.cardId else None
-            score = 0
-            if cd:
-                if is_gouging_fire(cd.cardId):
-                    score = 100
-                elif cd.cardId == FIRE_ENERGY:
-                    score = 80
-                elif cd.cardType == CardType.SUPPORTER:
-                    score = 70
-                elif cd.cardType == CardType.ITEM:
-                    score = 60
-            best.append((score, i))
-        best.sort(reverse=True)
-        return [b[1] for b in best[:select.maxCount]]
+            if opt.cardId == MEGA_LOPUNNY_EX:
+                return [i]
+        return [0]
     
-    # --- Default: return a valid selection ---
+    # --- LOOK ---
+    if context == SelectContext.LOOK:
+        scored = []
+        for i, opt in enumerate(options):
+            score = 0
+            if opt.cardId == MEGA_LOPUNNY_EX: score = 100
+            elif opt.cardId == BUNEARY: score = 80
+            else:
+                cd = get_card_data(opt.cardId) if opt.cardId else None
+                if cd and cd.cardType == CardType.BASIC_ENERGY: score = 70
+                elif cd and cd.cardType == CardType.SUPPORTER: score = 60
+                else: score = 30
+            scored.append((score, i))
+        scored.sort(reverse=True)
+        return [s[1] for s in scored[:select.maxCount]]
+    
+    # --- Default ---
     count = min(select.maxCount, len(options))
     count = max(count, select.minCount)
-    if count <= 0:
-        return []
-    return list(range(count))
+    return list(range(count)) if count > 0 else []
 
 
 def handle_yes_no(obs: Observation) -> list[int]:
-    """Handle Yes/No prompts."""
     select = obs.select
     context = select.context
     options = select.option
     
-    # Go first if given the choice
+    # Go first
     if context == SelectContext.IS_FIRST:
         for i, opt in enumerate(options):
-            if opt.type == OptionType.YES:
-                return [i]
-    
-    # Mulligan: redraw if no basic pokemon
+            if opt.type == OptionType.YES: return [i]
+    # Mulligan: redraw
     if context == SelectContext.MULLIGAN:
         for i, opt in enumerate(options):
-            if opt.type == OptionType.YES:
-                return [i]
-    
-    # Activate effects: generally yes
+            if opt.type == OptionType.YES: return [i]
+    # Activate effects: yes
     if context == SelectContext.ACTIVATE:
         for i, opt in enumerate(options):
-            if opt.type == OptionType.YES:
-                return [i]
-    
-    # Coin flip: heads
+            if opt.type == OptionType.YES: return [i]
+    # Coin: heads
     if context == SelectContext.COIN_HEAD:
         for i, opt in enumerate(options):
-            if opt.type == OptionType.YES:
-                return [i]
-    
+            if opt.type == OptionType.YES: return [i]
     # Default: yes
     for i, opt in enumerate(options):
-        if opt.type == OptionType.YES:
-            return [i]
+        if opt.type == OptionType.YES: return [i]
     return [0]
 
 
-def handle_energy_selection(obs: Observation) -> list[int]:
-    """Handle energy selection (for discard costs, etc.)."""
+def handle_energy(obs: Observation) -> list[int]:
     select = obs.select
-    options = select.option
-    # Just pick the first available energies up to maxCount
-    count = min(select.maxCount, len(options))
+    count = min(select.maxCount, len(select.option))
     count = max(count, select.minCount)
     return list(range(count))
 
 
-def handle_attack_selection(obs: Observation) -> list[int]:
-    """Handle attack selection."""
+def handle_attack(obs: Observation) -> list[int]:
     select = obs.select
     state = obs.current
-    options = select.option
-    
     best_i, best_score = 0, -1
-    for i, opt in enumerate(options):
-        score = score_attack_option(opt, state)
+    for i, opt in enumerate(select.option):
+        score = score_attack(opt, state)
         if score > best_score:
             best_score = score
             best_i = i
     return [best_i]
 
 
-def handle_count_selection(obs: Observation) -> list[int]:
-    """Handle count selection (how many cards to draw, etc.)."""
+def handle_count(obs: Observation) -> list[int]:
     select = obs.select
-    # Generally pick the maximum
+    # Pick maximum
     for i, opt in enumerate(select.option):
         if opt.type == OptionType.NUMBER and opt.number == select.maxCount:
             return [i]
-    # If max not available, pick highest
     best_i, best_val = 0, -1
     for i, opt in enumerate(select.option):
         if opt.number is not None and opt.number > best_val:
@@ -619,64 +590,43 @@ def handle_count_selection(obs: Observation) -> list[int]:
     return [best_i]
 
 
-def handle_special_condition(obs: Observation) -> list[int]:
-    """Handle special condition selection."""
-    return [0]
-
-
-def handle_skill_selection(obs: Observation) -> list[int]:
-    """Handle skill ordering."""
-    select = obs.select
-    return list(range(min(select.maxCount, len(select.option))))
-
-
 # ============================================================================
-# MAIN AGENT ENTRY POINT
+# MAIN ENTRY POINT
 # ============================================================================
 def agent(obs_dict: dict) -> list[int]:
-    """Main agent function called by the Kaggle environment."""
     _ensure_db()
     obs: Observation = to_observation_class(obs_dict)
     
-    # Initial deck selection
     if obs.select is None:
         return read_deck_csv()
     
     select = obs.select
     
     try:
-        # Route to the appropriate handler based on selection type
         if select.type == SelectType.MAIN:
-            return handle_main_selection(obs)
+            return handle_main(obs)
         elif select.type == SelectType.CARD:
-            return handle_card_selection(obs)
+            return handle_card(obs)
         elif select.type == SelectType.YES_NO:
             return handle_yes_no(obs)
         elif select.type == SelectType.ENERGY:
-            return handle_energy_selection(obs)
+            return handle_energy(obs)
         elif select.type == SelectType.ATTACK:
-            return handle_attack_selection(obs)
+            return handle_attack(obs)
         elif select.type == SelectType.COUNT:
-            return handle_count_selection(obs)
-        elif select.type == SelectType.SPECIAL_CONDITION:
-            return handle_special_condition(obs)
+            return handle_count(obs)
+        elif select.type in (SelectType.ATTACHED_CARD, SelectType.CARD_OR_ATTACHED_CARD, SelectType.EVOLVE):
+            return handle_card(obs)
         elif select.type == SelectType.SKILL:
-            return handle_skill_selection(obs)
-        elif select.type == SelectType.ATTACHED_CARD:
-            return handle_card_selection(obs)
-        elif select.type == SelectType.CARD_OR_ATTACHED_CARD:
-            return handle_card_selection(obs)
-        elif select.type == SelectType.EVOLVE:
-            return handle_card_selection(obs)
+            return list(range(min(select.maxCount, len(select.option))))
+        elif select.type == SelectType.SPECIAL_CONDITION:
+            return [0]
         else:
-            # Fallback for unknown selection types
             count = min(select.maxCount, len(select.option))
             count = max(count, select.minCount)
             return random.sample(list(range(len(select.option))), count)
     except Exception:
-        # Ultimate fallback: random valid selection
         count = min(select.maxCount, len(select.option))
         count = max(count, select.minCount)
-        if count <= 0:
-            return []
+        if count <= 0: return []
         return random.sample(list(range(len(select.option))), count)
