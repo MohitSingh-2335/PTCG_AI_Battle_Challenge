@@ -57,10 +57,10 @@ attack_table = {a.attackId: a for a in all_atk}
 # ============================================================================
 
 file_path = "deck.csv"
-
 if not os.path.exists(file_path):
-
-    file_path = "/kaggle_simulations/agent/" + file_path
+    file_path = "/kaggle_simulations/agent/deck.csv"
+if not os.path.exists(file_path):
+    file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deck.csv")
 
 with open(file_path, "r") as file:
 
@@ -87,6 +87,8 @@ MEGA_SIGNAL = 1145
 ULTRA_BALL = 1121
 
 MASTER_BALL = 1125
+BUDDY_BUDDY_POFFIN = 1086
+MIST_ENERGY = 11
 
 SWITCH = 1123
 
@@ -856,7 +858,21 @@ def agent(obs_dict: dict) -> list[int]:
 
                     elif data.cardType == CardType.ITEM:
 
-                        if card.id == MEGA_SIGNAL:
+                        if card.id == BUDDY_BUDDY_POFFIN:
+
+                            if len(my_state.bench) >= my_state.benchMax or (field_counts[BUNEARY] + field_counts[MEGA_LOPUNNY_EX] >= 3 and field_counts[FAN_ROTOM] >= 1):
+
+                                score = -1
+
+                            elif state.turn <= 2 or len(my_state.bench) == 0:
+
+                                score = 75000
+
+                            else:
+
+                                score = 48000
+
+                        elif card.id == MEGA_SIGNAL:
 
                             if field_counts[MEGA_LOPUNNY_EX] < 2:
 
