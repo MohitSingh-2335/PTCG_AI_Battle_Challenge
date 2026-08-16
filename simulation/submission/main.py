@@ -57,10 +57,10 @@ attack_table = {a.attackId: a for a in all_atk}
 # ============================================================================
 
 file_path = "deck.csv"
-
 if not os.path.exists(file_path):
-
-    file_path = "/kaggle_simulations/agent/" + file_path
+    file_path = "/kaggle_simulations/agent/deck.csv"
+if not os.path.exists(file_path):
+    file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deck.csv")
 
 with open(file_path, "r") as file:
 
@@ -87,6 +87,10 @@ MEGA_SIGNAL = 1145
 ULTRA_BALL = 1121
 
 MASTER_BALL = 1125
+BUDDY_BUDDY_POFFIN = 1086
+MIST_ENERGY = 11
+BOSS_S_ORDERS = 1182
+PRIME_CATCHER = 1088
 
 SWITCH = 1123
 
@@ -271,6 +275,8 @@ def agent(obs_dict: dict) -> list[int]:
     op_state = state.players[1 - my_index]
 
     my_active = my_state.active[0] if len(my_state.active) > 0 else None
+    is_mill_threat = len(op_state.discard or []) >= 10 and my_state.deckCount < 15
+    no_draw = my_state.deckCount <= (12 if is_mill_threat else 8)
 
 
 
@@ -346,8 +352,7 @@ def agent(obs_dict: dict) -> list[int]:
 
 
 
-    is_mill_threat = len(op_state.discard or []) >= 10 and my_state.deckCount < 15
-    no_draw = my_state.deckCount <= (12 if is_mill_threat else 8)
+    no_draw = my_state.deckCount <= 3
 
     # Track whether active Mega was switched in THIS turn.
 
@@ -660,7 +665,23 @@ def agent(obs_dict: dict) -> list[int]:
 
 
 
-                    elif context in (SelectContext.TO_BENCH, SelectContext.TO_HAND):
+                    elif context == SelectContext.TO_BENCH:
+
+                        if card.id == BUNEARY:
+
+                            score = 2500
+
+                        elif card.id == FAN_ROTOM:
+
+                            score = 2000 if field_counts[FAN_ROTOM] == 0 else 500
+
+                        else:
+
+                            score = 100
+
+
+
+                    elif context == SelectContext.TO_HAND:
 
                         score = hand_score(card.id)
 
@@ -856,7 +877,21 @@ def agent(obs_dict: dict) -> list[int]:
 
                     elif data.cardType == CardType.ITEM:
 
-                        if card.id == MEGA_SIGNAL:
+                        if card.id == BUDDY_BUDDY_POFFIN:
+
+                            if len(my_state.bench) >= my_state.benchMax or (field_counts[BUNEARY] + field_counts[MEGA_LOPUNNY_EX] >= 3 and field_counts[FAN_ROTOM] >= 1):
+
+                                score = -1
+
+                            elif state.turn <= 2 or len(my_state.bench) == 0:
+
+                                score = 75000
+
+                            else:
+
+                                score = 48000
+
+                        elif card.id == MEGA_SIGNAL:
 
                             if field_counts[MEGA_LOPUNNY_EX] < 2:
 
@@ -928,6 +963,13 @@ def agent(obs_dict: dict) -> list[int]:
 
                             score = -1
 
+                        elif card.id == BOSS_S_ORDERS:
+
+                            if op_state and op_state.bench:
+                                score = 78000
+                            else:
+                                score = -1
+
                         elif card.id == HILDA:
 
                             if no_draw:
@@ -958,7 +1000,7 @@ def agent(obs_dict: dict) -> list[int]:
 
                     elif data.cardType == CardType.STADIUM:
 
-                        score = -1
+                        score = 1000
 
                     elif data.cardType == CardType.BASIC_ENERGY or data.cardType == CardType.SPECIAL_ENERGY:
 
@@ -1024,11 +1066,13 @@ def agent(obs_dict: dict) -> list[int]:
 
             elif o.type == OptionType.RETREAT:
 
-                if need_switch and not (my_state.asleep or my_state.paralyzed):
+                is_asleep_or_paralyzed = bool(my_active and (getattr(my_active, 'asleep', False) or getattr(my_active, 'paralyzed', False)))
+
+                if need_switch and not is_asleep_or_paralyzed:
 
                     score = 10000
 
-                elif not active_is_mega and bench_has_mega:
+                elif not active_is_mega and bench_has_mega and not is_asleep_or_paralyzed:
 
                     score = 9000
 
@@ -1050,9 +1094,9 @@ def agent(obs_dict: dict) -> list[int]:
 
                     if atk.name and "Gale" in atk.name:
 
-                        my_active = my_state.active[0] if my_state.active else None
+                        switched = _turn_state.get('switched_this_turn', False) or (my_active is not None and my_active.appearThisTurn)
 
-                        if my_active is not None and my_active.appearThisTurn:
+                        if switched:
 
                             effective_damage = atk.damage + 170
 
@@ -1060,7 +1104,7 @@ def agent(obs_dict: dict) -> list[int]:
 
                     if op_active and op_active.hp <= effective_damage:
 
-                        score += 500
+                        score += 5000  # Priority to guaranteed knockout attack
 
 
 
