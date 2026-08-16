@@ -89,8 +89,6 @@ ULTRA_BALL = 1121
 MASTER_BALL = 1125
 BUDDY_BUDDY_POFFIN = 1086
 MIST_ENERGY = 11
-BOSS_S_ORDERS = 1182
-PRIME_CATCHER = 1088
 
 SWITCH = 1123
 
@@ -395,7 +393,7 @@ def agent(obs_dict: dict) -> list[int]:
 
     # Can cycling be enabled? True when bench has Mega and active is stale Mega
 
-    has_retreated = bool(getattr(state, 'retreatCount', 0))
+    has_retreated = bool(getattr(state, 'retreated', False))
     def is_guaranteed_return_pivot(p):
         if p is None: return False
         if p.id == MEGA_LOPUNNY_EX and len(p.energies) >= 1: return True
@@ -1065,7 +1063,7 @@ def agent(obs_dict: dict) -> list[int]:
 
             elif o.type == OptionType.RETREAT:
 
-                is_asleep_or_paralyzed = bool(my_active and (getattr(my_active, 'asleep', False) or getattr(my_active, 'paralyzed', False)))
+                is_asleep_or_paralyzed = bool(getattr(my_state, 'asleep', False) or getattr(my_state, 'paralyzed', False))
 
                 if need_switch and not is_asleep_or_paralyzed:
 
