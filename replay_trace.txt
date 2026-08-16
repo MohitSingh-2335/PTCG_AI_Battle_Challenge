@@ -1,0 +1,175 @@
+Total Steps: 29
+
+================================================== STEP 0 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=ACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 1 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[673, 673, 674, 674, 675, 675, 676, 676, 676, 677, 677, 677, 678, 678, 678, 678, 1102, 1102, 1102, 1102, 1123, 1123, 1141, 1141, 1141, 1141, 1142, 1142, 1142, 1142, 1152, 1152, 1152, 1152, 1159, 1182, 1182, 1192, 1192, 1192, 1192, 1227, 1227, 1227, 1227, 1252, 1252, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[848, 848, 848, 848, 849, 849, 849, 849, 174, 174, 1145, 1145, 1145, 1145, 1121, 1121, 1121, 1121, 1123, 1123, 1123, 1123, 1097, 1097, 1097, 1174, 1174, 1174, 1157, 1157, 1225, 1225, 1225, 1225, 1227, 1227, 1227, 1125, 1086, 1086, 11, 11, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 2 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 3 ==================================================
+  [Player 0] status=INACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=ACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 4 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 5 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0, 1]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 6 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[8]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 7 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 8 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 9 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[13]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 10 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[6]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 11 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 12 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 13 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[4]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 14 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 15 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[5]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 16 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 17 ==================================================
+  [Player 0] status=INACTIVE, reward=0, action=[1]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=ACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 18 ==================================================
+  [Player 0] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=ACTIVE, reward=0, action=[1]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 19 ==================================================
+  [Player 0] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 20 ==================================================
+  [Player 0] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 21 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 22 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 23 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[2]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 24 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 25 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 26 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 27 ==================================================
+  [Player 0] status=ACTIVE, reward=0, action=[3]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=INACTIVE, reward=0, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']
+
+================================================== STEP 28 ==================================================
+  [Player 0] status=DONE, reward=1, action=[0]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select', 'step']
+  [Player 1] status=DONE, reward=-1, action=[]
+    obs keys: ['current', 'logs', 'remainingOverageTime', 'search_begin_input', 'select']

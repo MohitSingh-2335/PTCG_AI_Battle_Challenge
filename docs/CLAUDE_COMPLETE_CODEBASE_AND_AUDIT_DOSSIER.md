@@ -156,6 +156,8 @@ ULTRA_BALL = 1121
 
 MASTER_BALL = 1125
 BUDDY_BUDDY_POFFIN = 1086
+PRIME_CATCHER = 1088
+BOSS_S_ORDERS = 1182
 MIST_ENERGY = 11
 
 SWITCH = 1123
@@ -274,9 +276,9 @@ def prize_count(pokemon: Pokemon, is_attack_damage: bool = True) -> int:
 
 
 
-def pokemon_target_score(pokemon: Pokemon, is_attack_damage: bool = True) -> int:
+def pokemon_target_score(pokemon: Pokemon, is_attack_damage: bool = True, my_prizes_left: int = 6) -> int:
 
-    """Evaluate how valuable it is to target this opponent pokemon."""
+    """Evaluate how valuable it is to target this opponent pokemon with lethal lookahead."""
 
     data = card_table.get(pokemon.id)
 
@@ -284,25 +286,30 @@ def pokemon_target_score(pokemon: Pokemon, is_attack_damage: bool = True) -> int
 
         return 0
 
-    score = prize_count(pokemon, is_attack_damage) * 1000
+    prizes = prize_count(pokemon, is_attack_damage)
+    
+    # 1. Instant Match Win Priority
+    if prizes >= my_prizes_left:
+        score = 60000
+    else:
+        score = prizes * 5000
 
-    score += len(pokemon.energies) * 150
+    # 2. Gale Thrust 230 Damage Lethal Knockout Threshold
+    if pokemon.hp <= 230:
+        score += 25000  # High priority to gust & KO targets within 1-shot range!
 
+    score += len(pokemon.energies) * 300
     score += len(pokemon.tools) * 100
 
     if data.stage2:
-
-        score += 250
-
+        score += 300
     elif data.stage1:
-
-        score += 130
+        score += 150
 
     if pokemon.id in (173, 174, 190, 1071):
+        score -= 500
 
-        score -= 200
-
-    score += pokemon.hp
+    score -= pokemon.hp // 2  # Lower remaining HP = easier knockout!
 
     return score
 
@@ -416,6 +423,20 @@ def agent(obs_dict: dict) -> list[int]:
 
         op_active_hp = op_active.hp
 
+    # ========================================================================
+    # OPPONENT THREAT & ARCHETYPE RECOGNITION ENGINE
+    # ========================================================================
+    op_pokes = [p.id for p in (op_state.active + op_state.bench) if p is not None]
+    op_discard_ids = [c.id for c in (op_state.discard or [])]
+    op_all_seen = set(op_pokes + op_discard_ids)
+
+    is_lucario_threat = any(cid in (673, 674, 675, 676, 677, 678) for cid in op_all_seen)
+    is_dragapult_threat = any(cid in (119, 120, 121) for cid in op_all_seen)
+    is_bolt_ogerpon_threat = any(cid in (63, 96, 108, 756) for cid in op_all_seen)
+    is_starmie_threat = any(cid in (1030, 1031) for cid in op_all_seen)
+    is_mill_threat = op_state.deckCount > 20 and my_state.deckCount < 15
+    no_draw = my_state.deckCount <= (12 if is_mill_threat else 8)
+
 
 
 
@@ -431,9 +452,9 @@ def agent(obs_dict: dict) -> list[int]:
 
     if context == SelectContext.MAIN:
 
-        if state.turn != _turn_state['turn'] or my_index != _turn_state['player']:
+        if state.turn == 1 or state.turn != _turn_state['turn'] or my_index != _turn_state['player']:
 
-            # New turn for this player: reset tracking
+            # New turn for this player (or game reset): reset tracking
 
             _turn_state['turn'] = state.turn
 
@@ -524,9 +545,27 @@ def agent(obs_dict: dict) -> list[int]:
 
             return 80
 
+        elif card_id == BUDDY_BUDDY_POFFIN:
+
+            if state.turn <= 2 and (field_counts[BUNEARY] + field_counts[MEGA_LOPUNNY_EX] < 3 or field_counts[FAN_ROTOM] == 0):
+
+                return 220
+
+            else:
+
+                return 45
+
         elif card_id == MASTER_BALL:
 
             return 90
+
+        elif card_id == PRIME_CATCHER:
+
+            return 180
+
+        elif card_id == BOSS_S_ORDERS:
+
+            return 175
 
         elif card_id == SWITCH:
 
@@ -558,9 +597,19 @@ def agent(obs_dict: dict) -> list[int]:
 
             return 55
 
+        elif card_id == MIST_ENERGY:
+
+            return 35
+
         elif card_id == WATER_ENERGY:
 
-            return 10
+            if hand_counts.get(WATER_ENERGY, 0) == 0 and not getattr(state, 'energyAttached', False):
+
+                return 170  # High priority to retrieve/hold first energy to attack!
+
+            else:
+
+                return 10
 
         else:
 
@@ -568,7 +617,7 @@ def agent(obs_dict: dict) -> list[int]:
 
 
 
-    def attach_score(pokemon: Pokemon, active: bool) -> int:
+    def attach_score(pokemon: Pokemon, active: bool, energy_card: Card = None) -> int:
 
         e = len(pokemon.energies)
 
@@ -606,6 +655,14 @@ def agent(obs_dict: dict) -> list[int]:
 
                 score -= 100
 
+            # Mist Energy intelligent shielding on Mega Lopunny ex (Blocks Dragapult & Attack Effects)
+            if energy_card is not None and getattr(energy_card, 'id', None) == MIST_ENERGY:
+                has_mist = any(getattr(ec, 'id', None) == MIST_ENERGY for ec in getattr(pokemon, 'energyCards', []))
+                if not has_mist:
+                    score += 3500 if is_dragapult_threat else 1800  # High priority Mist shield vs Dragapult!
+                else:
+                    score -= 500   # Don't stack duplicate Mist Energy on same Pokemon
+
         elif pokemon.id == BUNEARY:
 
             score += 50
@@ -613,6 +670,9 @@ def agent(obs_dict: dict) -> list[int]:
             if e >= 1:
 
                 score -= 300
+
+            if energy_card is not None and getattr(energy_card, 'id', None) == MIST_ENERGY:
+                score -= 200  # Prefer Basic Water on unevolved Buneary
 
         elif pokemon.id == FAN_ROTOM:
 
@@ -640,19 +700,13 @@ def agent(obs_dict: dict) -> list[int]:
 
             elif o.type == OptionType.YES:
 
-                if context == SelectContext.IS_FIRST:
-                    score = -1  # Prefer Going Second (attack & Supporter on Turn 1)
-                else:
-                    score = 1
+                score = 1
 
 
 
             elif o.type == OptionType.NO:
 
-                if context == SelectContext.IS_FIRST:
-                    score = 1   # Prefer Going Second
-                else:
-                    score = -1
+                score = -1
 
 
 
@@ -732,7 +786,7 @@ def agent(obs_dict: dict) -> list[int]:
 
                         else:
 
-                            score = pokemon_target_score(card, True) if isinstance(card, Pokemon) else 0
+                            score = pokemon_target_score(card, True, len(my_state.prize or [])) if isinstance(card, Pokemon) else 0
 
 
 
@@ -848,26 +902,60 @@ def agent(obs_dict: dict) -> list[int]:
 
 
 
-                    elif context == SelectContext.ATTACH_TO:
+                    elif context == SelectContext.TO_FIELD:
 
-                        # Tool attachment target: Air Balloon on Mega Lopunny
+                        if card.id == BUNEARY:
 
-                        if isinstance(card, Pokemon):
+                            score = 2500
 
-                            if card.id == MEGA_LOPUNNY_EX:
+                        elif card.id == FAN_ROTOM:
 
-                                score = 10000
-
-                            elif card.id == BUNEARY:
-
-                                score = 1000
-
-                            else:
-
-                                score = 100
+                            score = 2000 if field_counts[FAN_ROTOM] == 0 else 500
 
                         else:
 
+                            score = 100
+
+
+
+                    elif context == SelectContext.EFFECT_TARGET:
+
+                        if o.playerIndex != my_index:
+
+                            score = pokemon_target_score(card, False, len(my_state.prize or [])) if isinstance(card, Pokemon) else 0
+
+                        else:
+
+                            score = 1000 if card.id == MEGA_LOPUNNY_EX else 100
+
+
+
+                    elif context in (SelectContext.DISCARD_ENERGY_CARD, SelectContext.DISCARD_ENERGY):
+
+                        if getattr(card, 'id', None) == MIST_ENERGY:
+
+                            score = -100  # Preserve Mist Energy on our Pokemon!
+
+                        else:
+
+                            score = 100   # Discard Basic Water Energy first
+
+
+
+                    elif context == SelectContext.ATTACH_TO:
+
+                        # Tool attachment target: Air Balloon / Rescue Board
+                        if isinstance(card, Pokemon):
+                            has_tool = len(getattr(card, 'tools', []) or []) > 0
+                            if has_tool:
+                                score = -1000  # Do not attach second tool to already tooled Pokemon!
+                            elif card.id == MEGA_LOPUNNY_EX:
+                                score = 10000
+                            elif card.id == BUNEARY:
+                                score = 1000
+                            else:
+                                score = 100
+                        else:
                             score = 0
 
 
@@ -924,7 +1012,7 @@ def agent(obs_dict: dict) -> list[int]:
 
                         elif card.id == BUNEARY:
 
-                            if field_counts[BUNEARY] + field_counts[MEGA_LOPUNNY_EX] >= 3:
+                            if field_counts[BUNEARY] + field_counts[MEGA_LOPUNNY_EX] >= 4 or len(my_state.bench) >= my_state.benchMax:
 
                                 score = -1
 
@@ -950,7 +1038,7 @@ def agent(obs_dict: dict) -> list[int]:
 
                         if card.id == BUDDY_BUDDY_POFFIN:
 
-                            if len(my_state.bench) >= my_state.benchMax or (field_counts[BUNEARY] + field_counts[MEGA_LOPUNNY_EX] >= 3 and field_counts[FAN_ROTOM] >= 1):
+                            if len(my_state.bench) >= my_state.benchMax or (field_counts[BUNEARY] + field_counts[MEGA_LOPUNNY_EX] >= 4 and field_counts[FAN_ROTOM] >= 1):
 
                                 score = -1
 
@@ -986,6 +1074,20 @@ def agent(obs_dict: dict) -> list[int]:
 
                             score = 47000
 
+                        elif card.id == PRIME_CATCHER:
+
+                            if len(op_state.bench or []) > 0:
+
+                                score = 88000  # High priority ACE SPEC gust + switch combo!
+
+                            elif need_switch:
+
+                                score = 65000
+
+                            else:
+
+                                score = -1
+
                         elif card.id == SWITCH:
 
                             if need_switch:
@@ -1002,6 +1104,10 @@ def agent(obs_dict: dict) -> list[int]:
 
                                 score = 42000
 
+                            elif discard_counts.get(WATER_ENERGY, 0) > 0 and hand_counts.get(WATER_ENERGY, 0) == 0 and not state.energyAttached:
+
+                                score = 41000
+
                             else:
 
                                 score = -1
@@ -1012,7 +1118,14 @@ def agent(obs_dict: dict) -> list[int]:
 
                     elif data.cardType == CardType.TOOL:
 
-                        if card.id == AIR_BALLOON and field_counts[MEGA_LOPUNNY_EX] >= 1:
+                        all_pokes = [p for p in (my_state.active + my_state.bench) if p is not None]
+                        has_unattached = any(len(getattr(p, 'tools', []) or []) == 0 for p in all_pokes)
+
+                        if not has_unattached:
+
+                            score = -1  # All Pokémon already equipped with tools!
+
+                        elif card.id == AIR_BALLOON and field_counts[MEGA_LOPUNNY_EX] >= 1:
 
                             score = 60000  # Free retreat = Gale Thrust every turn
 
@@ -1036,9 +1149,26 @@ def agent(obs_dict: dict) -> list[int]:
 
                         elif card.id == BOSS_S_ORDERS:
 
-                            if op_state and op_state.bench:
-                                score = 78000
+                            if state.supporterPlayed:
+
+                                score = -1
+
+                            elif len(op_state.bench or []) > 0:
+
+                                # Check for high value targets or Ogerpon energy engines
+                                has_ogerpon = any(p is not None and p.id == 96 for p in op_state.bench)
+                                has_target = any(p is not None and (p.hp <= 230 or prize_count(p, True) >= 2 or p.id == 96) for p in op_state.bench)
+
+                                if (has_target or has_ogerpon) and active_is_mega:
+
+                                    score = 97000 if has_ogerpon else 96000  # Drag & KO Ogerpon to shut down enemy energy acceleration!
+
+                                else:
+
+                                    score = 70000
+
                             else:
+
                                 score = -1
 
                         elif card.id == HILDA:
@@ -1046,10 +1176,6 @@ def agent(obs_dict: dict) -> list[int]:
                             if no_draw:
 
                                 score = -1
-
-                            elif field_counts[MEGA_LOPUNNY_EX] == 0:
-
-                                score = 94000
 
                             else:
 
@@ -1086,10 +1212,11 @@ def agent(obs_dict: dict) -> list[int]:
             elif o.type == OptionType.ATTACH:
 
                 pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
+                energy_card = get_card(obs, o.area, o.index, my_index)
 
                 if pokemon is not None and isinstance(pokemon, Pokemon):
 
-                    score = attach_score(pokemon, o.inPlayArea == AreaType.ACTIVE)
+                    score = attach_score(pokemon, o.inPlayArea == AreaType.ACTIVE, energy_card)
 
                 else:
 
@@ -1105,11 +1232,16 @@ def agent(obs_dict: dict) -> list[int]:
 
                 if pokemon is not None and isinstance(pokemon, Pokemon):
 
-                    score += len(pokemon.energies)
+                    score += len(pokemon.energies) * 500
 
                     if o.inPlayArea == AreaType.BENCH:
 
                         score += 100
+
+                    # Prioritize evolving damaged Buneary to boost HP to 330 and prevent snipe KO
+                    damage_taken = pokemon.maxHp - pokemon.hp
+                    if damage_taken > 0:
+                        score += damage_taken * 50
 
 
 
@@ -1138,14 +1270,16 @@ def agent(obs_dict: dict) -> list[int]:
             elif o.type == OptionType.RETREAT:
 
                 is_asleep_or_paralyzed = bool(getattr(my_state, 'asleep', False) or getattr(my_state, 'paralyzed', False))
+                is_statused = bool(getattr(my_state, 'confused', False) or getattr(my_state, 'poisoned', False) or getattr(my_state, 'burned', False))
+                is_active_damaged = my_active is not None and my_active.id == MEGA_LOPUNNY_EX and my_active.hp <= 100
 
-                if need_switch and not is_asleep_or_paralyzed:
+                if (need_switch or is_active_damaged) and not is_asleep_or_paralyzed:
 
-                    score = 10000
+                    score = 10000  # Retreat damaged Mega or stale Mega into fresh attacker!
 
-                elif not active_is_mega and bench_has_mega and not is_asleep_or_paralyzed:
+                elif (not active_is_mega or is_statused) and bench_has_mega and not is_asleep_or_paralyzed:
 
-                    score = 9000
+                    score = 9500  # Retreat to cure confusion/poison/burn or bring in Mega!
 
                 else:
 
@@ -1175,7 +1309,11 @@ def agent(obs_dict: dict) -> list[int]:
 
                     if op_active and op_active.hp <= effective_damage:
 
-                        score += 5000  # Priority to guaranteed knockout attack
+                        prizes_taken = prize_count(op_active, True)
+                        if prizes_taken >= len(my_state.prize or []):
+                            score += 50000  # Instant Game-Winning Lethal Knockout!
+                        else:
+                            score += 5000   # Guaranteed knockout attack priority
 
 
 
