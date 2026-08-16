@@ -81,12 +81,13 @@ else:
 # CHECKPOINT 6: Mill-Aware Draw Suppression
 # -----------------------------------------------------------------------------------
 print("\n[CHECKPOINT 6/10] Mill-Aware Draw Suppression:")
-has_mill_guard = 'no_draw' in code_content and 'deckCount <= 3' in code_content
+has_mill_guard = 'is_mill_threat' in code_content and '12 if is_mill_threat else 8' in code_content
+has_no_duplicate = code_content.count('no_draw =') == 1
 
-if has_mill_guard:
-    print("  * Self-Mill Guard: Draw suppressed when deckCount <= 3 [PASSED]")
+if has_mill_guard and has_no_duplicate:
+    print("  * Mill-Aware Guard: Validated (12 if is_mill_threat else 8, 0 duplicates) [PASSED]")
 else:
-    print("  * Self-Mill Guard: Missing [FAILED]")
+    print(f"  * Mill-Aware Guard: Failed (has_guard={has_mill_guard}, no_duplicates={has_no_duplicate}) [FAILED]")
     all_passed = False
 
 # -----------------------------------------------------------------------------------

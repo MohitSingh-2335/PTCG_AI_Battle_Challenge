@@ -352,7 +352,6 @@ def agent(obs_dict: dict) -> list[int]:
 
 
 
-    no_draw = my_state.deckCount <= 3
 
     # Track whether active Mega was switched in THIS turn.
 

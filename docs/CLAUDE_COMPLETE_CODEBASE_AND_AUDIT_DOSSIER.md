@@ -208,7 +208,8 @@ def agent(obs_dict: dict) -> list[int]:
     my_state = state.players[my_index]
     op_state = state.players[1 - my_index]
     my_active = my_state.active[0] if len(my_state.active) > 0 else None
-    no_draw = my_state.deckCount <= 3
+    is_mill_threat = len(op_state.discard or []) >= 10 and my_state.deckCount < 15
+    no_draw = my_state.deckCount <= (12 if is_mill_threat else 8)
 
     field_counts = defaultdict(int)
     hand_counts = defaultdict(int)
