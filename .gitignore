@@ -1,41 +1,63 @@
 # ============================================================================
-# GITIGNORE FOR PTCG AI BATTLE CHALLENGE
+# GITIGNORE FOR PTCG AI BATTLE CHALLENGE (CLEAN & NON-DUPLICATE REPOSITORY)
 # ============================================================================
 
-# Byte-compiled / Python cache
+# Python & Bytecode Cache
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 
-# Compiled native C++ binaries & libraries
+# Compiled Native C++ Binaries & Shared Libraries
 *.dll
 *.so
 *.dylib
+cg/*.dll
+cg/*.so
+cg/*.dylib
+simulation/submission/cg/*.dll
+simulation/submission/cg/*.so
+simulation/submission/cg/*.dylib
+simulation/candidate_meta/cg/*.dll
+simulation/candidate_meta/cg/*.so
+simulation/candidate_meta/cg/*.dylib
 
-# Submission archives & compressed packages (keep repo lightweight)
+# Large Archives & Compression Packages (Keep GitHub Repository Lightweight)
 *.tar.gz
+*.tar
 *.zip
+*.7z
+*.rar
 archive/
 
-# Raw replay datasets & local data folders (large JSON replay dumps)
+# Temporary Bundles & Staging Folders
+competition_evidence_bundle/
+master_project_export_bundle/
+*bundle*/
+*extracted*/
+temp_*/
+*_temp/
+scratch/
+
+# Raw Replay Datasets & Large JSON Telemetry (Stored in Local Archives)
 **/Data/
 Data/
 *.jsonl
 *.json
+!package.json
+!tsconfig.json
 
-# Temporary runs, logs & sandbox folders
-simulation/temp_submission_test/
-simulation/v10_audit_sandbox/
+# Temporary Runs, Logs & Scratch Files
 *.tmp
 *.log
+*.bak
+simulation/temp_submission_test/
+simulation/v10_audit_sandbox/
 
-# Environment & Secrets
+# Environment, Secrets & IDE Configs
 .env
 .venv/
 env/
-
-# IDE & OS specific files
 .DS_Store
 Thumbs.db
 .vscode/
