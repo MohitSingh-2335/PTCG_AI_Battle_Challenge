@@ -11,6 +11,17 @@ Built upon empirical analysis of **193 real tournament match replays** and calib
 
 ---
 
+## 🤖 Claude External Audit & Documentation Quick Links
+
+If you are connecting **Anthropic Claude** to this repository, start here:
+* 📘 **[CLAUDE_PROJECT_GUIDE.md](file:///D:/Project/PTCG_AI_Battle_Challenge/CLAUDE_PROJECT_GUIDE.md)** — Complete orientation guide, sitemap, and review prompts for Claude.
+* 📄 **[CLAUDE_COMPLETE_CODEBASE_AND_AUDIT_DOSSIER.md](file:///D:/Project/PTCG_AI_Battle_Challenge/docs/CLAUDE_COMPLETE_CODEBASE_AND_AUDIT_DOSSIER.md)** — Full codebase, resolved bugs, and review focus areas.
+* 📜 **[V8_TO_V13_CHRONOLOGICAL_EVOLUTION_AND_CHANGELOG.md](file:///D:/Project/PTCG_AI_Battle_Challenge/docs/V8_TO_V13_CHRONOLOGICAL_EVOLUTION_AND_CHANGELOG.md)** — Evolution roadmap and version comparison.
+* 🛡️ **[MANDATORY_QUALITY_ASSURANCE_AND_CROSS_CHECK_PROTOCOL.md](file:///D:/Project/PTCG_AI_Battle_Challenge/docs/MANDATORY_QUALITY_ASSURANCE_AND_CROSS_CHECK_PROTOCOL.md)** — The 10 Ironclad QA Checkpoints.
+* 📊 **[MASTER_EXHAUSTIVE_RESEARCH_AUDIT_AND_SOLUTIONS_REPORT.md](file:///D:/Project/PTCG_AI_Battle_Challenge/docs/MASTER_EXHAUSTIVE_RESEARCH_AUDIT_AND_SOLUTIONS_REPORT.md)** — Master 15,000-match audit and solutions report.
+
+---
+
 ## 🏆 Tournament Performance Matrix
 
 Evaluated across canonical multi-archetype gauntlet matches against the top winning deck formations in the competition:
